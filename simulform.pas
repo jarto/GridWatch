@@ -167,13 +167,14 @@ end;
 procedure TGridWatchSimulationForm.SimulateClick(Sender: TObject);
 var Demand,Production,Extra: Integer;
     ProdWind,ProdHydro: Integer;
-    WindShare,HydroShare: Extended;
+    WindShare,HydroShare,OneMinute: Extended;
     ColData: array of String;
     Year,DataLine: String;
     F: TextFile;
-    TimeStamp: TDateTime;
+    TimeStamp,LastTimeStamp,dT: TDateTime;
 begin
   if FFileName='' then exit;
+  ShortagesGrid.RowCount:=1;
 
   FDemandColumn:=0;
   FWindColumn:=0;
@@ -181,6 +182,7 @@ begin
   FTimeColumn:=0;
   FShortageCount:=0;
   FShortageStarted:=0;
+  OneMinute:=EncodeTime(0,1,0,0);
 
   FStorageEfficiency:=StrToIntDef(StorageEfficiency.Text,0);
   if FStorageEfficiency<0 then FStorageEfficiency:=0
@@ -199,6 +201,12 @@ begin
   if UseWind.Checked then WindShare:=StrToFloatDef(WindCap.Text,0) else WindShare:=0;
   if UseHydro.Checked then HydroShare:=StrToFloatDef(HydroCap.Text,0) else HydroShare:=0;
 
+  //Do all calculations with integers using MW-minutes as Gridwatch data
+  //is available with 5 min intervals. Better precision could be achived by
+  //using floating point, but it's probably not needed.
+
+  FMaxStored:=FMaxStored*6*60; //Dinorwig runs out of water in 6 hours -> MW-minutes.
+
   case PumpStart.ItemIndex of
     1: FStoredElectricity:=FMaxStored div 2; //Start half full
     2: FStoredElectricity:=FMaxStored;       //Start full capacity
@@ -209,6 +217,7 @@ begin
   try
     AssignFile(F,FFileName);
     SetLength(ColData,1);
+    LastTimeStamp:=0; Extra:=0; Production:=0;
     try
       Reset(F);
       while not eof(F) do begin
@@ -218,19 +227,24 @@ begin
           FindColumns(ColData);
           continue;
         end;
-        TimeStamp:=StrToDateTime(ColData[FTimeColumn]);
         if (Year<>'') and (pos(Year,ColData[FTimeColumn])<>1) then begin
           if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
           continue;
         end;
+        TimeStamp:=StrToDateTime(ColData[FTimeColumn]);
+        if LastTimeStamp>0 then begin
+          dT:=TimeStamp-LastTimeStamp; //Time between timestamps
+          //Convert energy to MW-minutes
+          Extra:=Round((Production-Demand)*dT/OneMinute);
+          Demand:=Round(Demand*dT/OneMinute);
+          if Extra>=0 then StoreElectricity(Extra,TimeStamp)
+          else UseStoredElectricity(-Extra,Demand,TimeStamp);
+        end;
+        LastTimeStamp:=TimeStamp;
         Demand:=StrToIntDef(ColData[FDemandColumn],0);
         ProdWind:=StrToIntDef(ColData[FWindColumn],0);
         ProdHydro:=StrToIntDef(ColData[FHydroColumn],0);
         Production:=Round(WindShare*ProdWind+HydroShare*ProdHydro);
-        if (Demand<=0) or (Production<=0) then continue; //Probably en error in data -> Ignore
-        Extra:=Production-Demand;
-        if Extra>=0 then StoreElectricity(Extra,TimeStamp)
-        else UseStoredElectricity(-Extra,Demand,TimeStamp);
       end;
       if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
     finally
@@ -293,7 +307,7 @@ end;
 procedure TGridWatchSimulationForm.StoreElectricity(e: Int64; TimeStamp: TDateTime);
 begin
   if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
-  FStoredElectricity:=FStoredElectricity+e*FStorageEfficiency div 100;
+  FStoredElectricity:=FStoredElectricity+(e*FStorageEfficiency) div 100;
   if FStoredElectricity>FMaxStored then FStoredElectricity:=FMaxStored;
 end;
 
@@ -301,7 +315,6 @@ procedure TGridWatchSimulationForm.UseStoredElectricity(e,Demand: Int64; TimeSta
 var Missing,Per: Int64;
 begin
   Missing:=e-FStoredElectricity;
-  if Missing<=0 then Missing:=0;
   if Missing>0 then begin
     Per:=100-Round((Missing*100/Demand));
     if Per<FWorstShortage then FWorstShortage:=Per;

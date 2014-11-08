@@ -133,7 +133,7 @@ var FStream: TFileStream;
 
 begin
   if FileSaveDialog.Execute then begin
-    FStream:=TFileStream.Create(FileSaveDialog.FileName,fmCreate);
+    FStream:=TFileStream.Create(FileSaveDialog.FileName+'-info.txt',fmCreate);
     try
       AddToStream(Format('Year %s',[Filter.Text])+LineEnding);
       AddToStream(Format('Shortage treshold %d %',[FShortageTreshold])+LineEnding);
@@ -152,10 +152,10 @@ begin
         AddToStream(Format('Capacity at start %d %',[StartStore])+LineEnding);
       end;
       AddToStream(LineEnding);
-      ShortagesGrid.SaveToCSVStream(FStream);
     finally
       FStream.Free;
     end;
+    ShortagesGrid.SaveToCSVFile(FileSaveDialog.FileName);
   end;
 end;
 

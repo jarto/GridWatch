@@ -19,6 +19,7 @@ USAGE:
 - Specify, how much Pumped storage you want to use for Energy storage
   - 10 = 10 Pumped Storage Power Stations the size of Dinorwig.
   - Efficiency of the Energy Storage.
+  - How long will it take before running out of water running at full power. 6h is what Dinorwig has
   - How full are the Pumped Storage Power Stations at the start of the simulation
 - Download the gridwatch csv data from http://www.gridwatch.templar.co.uk/download.php
 - Specify the year you want test. If you leave this empty, the whole gridwatch data is used.
@@ -33,4 +34,17 @@ Any shortages are logged to the grid. Logged information contains:
 - When the shortage ended
 - How long the shortage was
 - Lowest = How little electricity was available at the worst time during the shortage
+
+CHANGELOG
+
+08.11.2014 V1.00 Initial version
+12.11.2014 V1.01 Changes to pumped storage:
+                 - Define how long it will take to run out of water.
+                 - Make sure to not get more energy from pumped storage, than it can produce in dT.
+                 Added more documentation to the code.
+                 Added license
+
+LICENSE
+
+GNU General Public License v3
 

@@ -15,6 +15,8 @@ type
 
   TGridWatchSimulationForm = class(TForm)
     FileSaveDialog: TSaveDialog;
+    Label11: TLabel;
+    Label12: TLabel;
     SaveResults: TButton;
     FileOpenDialog: TOpenDialog;
     ShortageTreshold: TEdit;
@@ -31,6 +33,7 @@ type
     OpenCsv: TButton;
     StorageEfficiency: TEdit;
     Label6: TLabel;
+    StorageMaxHours: TEdit;
     UsePump: TCheckBox;
     Label2: TLabel;
     MaxPump: TEdit;
@@ -50,21 +53,23 @@ type
   private
     FFileName: String;
     FCapMultiEdits: array of TEdit;
-    FStoredElectricity: Int64;
+    FDinorwigCount: Extended;
+    FStoredElectricity: Extended;
     FStorageEfficiency: Integer; // In percentage
+    FStorageMaxTime: Integer; // In minutes
     FShortageCount: Integer;
     FShortageStarted: TDateTime;
     FWorstShortage: Integer;
     FShortageTreshold: Integer;
-    FMaxStored: Int64;
+    FMaxStored: Extended;
     FDemandColumn: Integer;
     FWindColumn: Integer;
     FHydroColumn: Integer;
     FTimeColumn: Integer;
     procedure FindColumns(const ColData: TStrArray);
     procedure LogEndOfShortage(TimeStamp: TDateTime);
-    procedure StoreElectricity(e: Int64; TimeStamp: TDateTime);
-    procedure UseStoredElectricity(e,Demand: Int64; TimeStamp: TDateTime);
+    procedure StoreElectricity(e: Extended; TimeStamp: TDateTime);
+    procedure UseStoredElectricity(e,Demand: Extended; TimeStamp: TDateTime);
   public
     { public declarations }
   end;
@@ -165,9 +170,9 @@ begin
 end;
 
 procedure TGridWatchSimulationForm.SimulateClick(Sender: TObject);
-var Demand,Production,Extra: Integer;
+var Demand,Production: Integer;
     ProdWind,ProdHydro: Integer;
-    WindShare,HydroShare,OneMinute: Extended;
+    WindShare,HydroShare,OneMinute,Extra,eMax: Extended;
     ColData: array of String;
     Year,DataLine: String;
     F: TextFile;
@@ -182,47 +187,58 @@ begin
   FTimeColumn:=0;
   FShortageCount:=0;
   FShortageStarted:=0;
+  FWorstShortage:=100;
   OneMinute:=EncodeTime(0,1,0,0);
 
+  //Efficiency of storage. Allowed values 0-100
   FStorageEfficiency:=StrToIntDef(StorageEfficiency.Text,0);
   if FStorageEfficiency<0 then FStorageEfficiency:=0
   else if FStorageEfficiency>100 then FStorageEfficiency:=100;
 
+  //How many hours the pumped storage can produce at max efficiency
+  FStorageMaxTime:=Round(StrToFloatDef(StorageMaxHours.Text,0)*60);
+  if FStorageMaxTime<0 then FStorageMaxTime:=0;
+
+  //If production drops under this, a shortage is logged. Allowed values 0-100.
   FShortageTreshold:=StrToIntDef(ShortageTreshold.Text,100);
   if FShortageTreshold>100 then FShortageTreshold:=100;
   if FShortageTreshold<0 then FShortageTreshold:=0;
 
-  FWorstShortage:=100;
-  if UsePump.Checked then FMaxStored:=Round(StrToFloatDef(MaxPump.Text,0)*1728) else FMaxStored:=0;
-  if FMaxStored<0 then FMaxStored:=0;
+  if UsePump.Checked then begin
+    FDinorwigCount:=StrToFloatDef(MaxPump.Text,0); //How many Dinorwigs do we have?
+    if FDinorwigCount<0 then FDinorwigCount:=0;
+    FMaxStored:=FDinorwigCount*1728*FStorageMaxTime; //Max energy that can be stored
+    if FMaxStored<0 then FMaxStored:=0;
+  end else begin
+    FMaxStored:=0;
+    FDinorwigCount:=0;
+  end;
 
-  Year:=Filter.Text;
-
-  if UseWind.Checked then WindShare:=StrToFloatDef(WindCap.Text,0) else WindShare:=0;
-  if UseHydro.Checked then HydroShare:=StrToFloatDef(HydroCap.Text,0) else HydroShare:=0;
-
-  //Do all calculations with integers using MW-minutes as Gridwatch data
-  //is available with 5 min intervals. Better precision could be achived by
-  //using floating point, but it's probably not needed.
-
-  FMaxStored:=FMaxStored*6*60; //Dinorwig runs out of water in 6 hours -> MW-minutes.
-
+  //Stored energy at start of simulation
   case PumpStart.ItemIndex of
-    1: FStoredElectricity:=FMaxStored div 2; //Start half full
+    1: FStoredElectricity:=FMaxStored*0.5;   //Start half full
     2: FStoredElectricity:=FMaxStored;       //Start full capacity
     else FStoredElectricity:=0;              //Start empty
   end;
+
+  //How much wind and hydro will be used
+  if UseWind.Checked then WindShare:=StrToFloatDef(WindCap.Text,0) else WindShare:=0;
+  if UseHydro.Checked then HydroShare:=StrToFloatDef(HydroCap.Text,0) else HydroShare:=0;
+
+  Year:=Filter.Text;
 
   Screen.Cursor:=crHourGlass;
   try
     AssignFile(F,FFileName);
     SetLength(ColData,1);
     LastTimeStamp:=0; Extra:=0; Production:=0;
+    TimeStamp:=0; Demand:=0;
     try
       Reset(F);
       while not eof(F) do begin
         ReadLn(F,DataLine);
         SplitString(DataLine,',',ColData);
+        //Find the right columns from column headers
         if FWindColumn=0 then begin
           FindColumns(ColData);
           continue;
@@ -234,11 +250,16 @@ begin
         TimeStamp:=StrToDateTime(ColData[FTimeColumn]);
         if LastTimeStamp>0 then begin
           dT:=TimeStamp-LastTimeStamp; //Time between timestamps
-          //Convert energy to MW-minutes
+          //Convert to MW-minutes.
           Extra:=Round((Production-Demand)*dT/OneMinute);
           Demand:=Round(Demand*dT/OneMinute);
           if Extra>=0 then StoreElectricity(Extra,TimeStamp)
-          else UseStoredElectricity(-Extra,Demand,TimeStamp);
+          else begin
+            Extra:=-Extra;
+            eMax:=FDinorwigCount*1728*dT/OneMinute; //Max amount available from pumped storage during dT
+            if Extra>eMax then Extra:=eMax;
+            UseStoredElectricity(Extra,Demand,TimeStamp);
+          end;
         end;
         LastTimeStamp:=TimeStamp;
         Demand:=StrToIntDef(ColData[FDemandColumn],0);
@@ -283,16 +304,19 @@ begin
       ShortagesGrid.Cells[2,FShortageCount]:=IntToStr(i);
       ShLen:=ShLen-i;
     end;
+    //Calculate days
     i:=Trunc(ShLen/EncodeTime(1,0,0,0));
     if i>0 then begin
       ShortagesGrid.Cells[3,FShortageCount]:=IntToStr(i);
       ShLen:=ShLen-i*EncodeTime(1,0,0,0);
     end;
+    //Hours
     i:=Trunc(ShLen/EncodeTime(0,1,0,0));
     if i>0 then begin
       ShortagesGrid.Cells[4,FShortageCount]:=IntToStr(i);
       ShLen:=ShLen-i*EncodeTime(0,1,0,0);
     end;
+    //Minutes
     i:=Trunc(ShLen/EncodeTime(0,0,1,0));
     if i>0 then begin
       ShortagesGrid.Cells[5,FShortageCount]:=IntToStr(i);
@@ -304,15 +328,19 @@ begin
   end;
 end;
 
-procedure TGridWatchSimulationForm.StoreElectricity(e: Int64; TimeStamp: TDateTime);
+procedure TGridWatchSimulationForm.StoreElectricity(e: Extended; TimeStamp: TDateTime);
+//  Assume that we can store all extra electricity, until the pumped storage is full.
+//  In real life it's possible that all excess energy can't be stored at the rate
+//  it's produced.
 begin
   if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
-  FStoredElectricity:=FStoredElectricity+(e*FStorageEfficiency) div 100;
+  FStoredElectricity:=FStoredElectricity+(e*FStorageEfficiency)/100;
   if FStoredElectricity>FMaxStored then FStoredElectricity:=FMaxStored;
 end;
 
-procedure TGridWatchSimulationForm.UseStoredElectricity(e,Demand: Int64; TimeStamp: TDateTime);
-var Missing,Per: Int64;
+procedure TGridWatchSimulationForm.UseStoredElectricity(e,Demand: Extended; TimeStamp: TDateTime);
+var Missing: Extended;
+    Per: Int64;
 begin
   Missing:=e-FStoredElectricity;
   if Missing>0 then begin

@@ -1,9 +1,9 @@
 object GridWatchSimulationForm: TGridWatchSimulationForm
-  Left = 341
+  Left = 281
   Height = 414
-  Top = 116
+  Top = 178
   Width = 989
-  Caption = 'GridWatch green energy simulation V1.01'
+  Caption = 'GridWatch green energy simulation V1.02'
   ClientHeight = 414
   ClientWidth = 989
   OnDestroy = FormDestroy
@@ -225,56 +225,12 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
       OnClick = SimulateClick
       TabOrder = 1
     end
-    object ShortagesGrid: TStringGrid
-      Left = 8
-      Height = 322
-      Top = 40
-      Width = 680
-      Anchors = [akTop, akLeft, akRight, akBottom]
-      ColCount = 7
-      FixedCols = 0
-      RowCount = 1
-      TabOrder = 2
-      ColWidths = (
-        163
-        169
-        64
-        64
-        64
-        64
-        64
-      )
-      Cells = (
-        7
-        0
-        0
-        'Shortage started'
-        1
-        0
-        'Shortage ended'
-        2
-        0
-        'Days'
-        3
-        0
-        'Hours'
-        4
-        0
-        'Minutes'
-        5
-        0
-        'Seconds'
-        6
-        0
-        'Lowest'
-      )
-    end
     object ShortageTreshold: TEdit
       Left = 288
       Height = 25
       Top = 8
       Width = 42
-      TabOrder = 3
+      TabOrder = 2
       Text = '90'
     end
     object Label9: TLabel
@@ -302,7 +258,7 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
       Caption = 'Save results'
       Enabled = False
       OnClick = SaveResultsClick
-      TabOrder = 4
+      TabOrder = 3
     end
     object OpenCsv: TButton
       Left = 392
@@ -312,7 +268,78 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
       Anchors = [akTop, akRight]
       Caption = 'Open gridwatch csv file'
       OnClick = OpenCsvClick
+      TabOrder = 4
+    end
+    object PageControl1: TPageControl
+      Left = 0
+      Height = 328
+      Top = 32
+      Width = 696
+      ActivePage = ResultsPage
+      TabIndex = 0
       TabOrder = 5
+      object ResultsPage: TTabSheet
+        Caption = 'Results'
+        ClientHeight = 291
+        ClientWidth = 688
+        object ResultsMemo: TMemo
+          Left = 0
+          Height = 291
+          Top = 0
+          Width = 688
+          Align = alClient
+          TabOrder = 0
+        end
+      end
+      object ShortagesPage: TTabSheet
+        Caption = 'Shortages'
+        ClientHeight = 291
+        ClientWidth = 688
+        object ShortagesGrid: TStringGrid
+          Left = 0
+          Height = 291
+          Top = 0
+          Width = 688
+          Align = alClient
+          ColCount = 7
+          FixedCols = 0
+          RowCount = 1
+          TabOrder = 0
+          ColWidths = (
+            163
+            169
+            64
+            64
+            64
+            64
+            64
+          )
+          Cells = (
+            7
+            0
+            0
+            'Shortage started'
+            1
+            0
+            'Shortage ended'
+            2
+            0
+            'Days'
+            3
+            0
+            'Hours'
+            4
+            0
+            'Minutes'
+            5
+            0
+            'Seconds'
+            6
+            0
+            'Lowest'
+          )
+        end
+      end
     end
   end
   object FileOpenDialog: TOpenDialog

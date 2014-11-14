@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, FileUtil, Forms, Controls, Graphics, Dialogs, ExtCtrls,
-  StdCtrls, Grids, StrUtils;
+  StdCtrls, Grids, ComCtrls, StrUtils;
 
 type
   TStrArray = array of String;
@@ -17,13 +17,15 @@ type
     FileSaveDialog: TSaveDialog;
     Label11: TLabel;
     Label12: TLabel;
+    ResultsMemo: TMemo;
+    PageControl1: TPageControl;
     SaveResults: TButton;
     FileOpenDialog: TOpenDialog;
+    ShortagesGrid: TStringGrid;
     ShortageTreshold: TEdit;
     Label10: TLabel;
     Label9: TLabel;
     PumpStart: TRadioGroup;
-    ShortagesGrid: TStringGrid;
     Simulate: TButton;
     Filter: TEdit;
     GroupBox1: TGroupBox;
@@ -34,6 +36,8 @@ type
     StorageEfficiency: TEdit;
     Label6: TLabel;
     StorageMaxHours: TEdit;
+    ResultsPage: TTabSheet;
+    ShortagesPage: TTabSheet;
     UsePump: TCheckBox;
     Label2: TLabel;
     MaxPump: TEdit;
@@ -55,21 +59,25 @@ type
     FCapMultiEdits: array of TEdit;
     FDinorwigCount: Extended;
     FStoredElectricity: Extended;
+    FWastedElectricity: Extended;
+    FUsedElectricity: Extended;
     FStorageEfficiency: Integer; // In percentage
-    FStorageMaxTime: Integer; // In minutes
+    FStorageMaxTime: Integer; // In hours
     FShortageCount: Integer;
     FShortageStarted: TDateTime;
-    FWorstShortage: Integer;
-    FShortageTreshold: Integer;
+    FWorstShortage: Extended;
+    FAllTimeWorstShortage: Extended;
+    FShortageTreshold: Extended;
     FMaxStored: Extended;
     FDemandColumn: Integer;
     FWindColumn: Integer;
     FHydroColumn: Integer;
     FTimeColumn: Integer;
+    function BorrowFromStorage(Needed: Extended): Extended;
     procedure FindColumns(const ColData: TStrArray);
     procedure LogEndOfShortage(TimeStamp: TDateTime);
-    procedure StoreElectricity(e: Extended; TimeStamp: TDateTime);
-    procedure UseStoredElectricity(e,Demand: Extended; TimeStamp: TDateTime);
+    procedure SaveResultsToStream(Stream: TStream);
+    procedure StoreElectricity(StoreMWh: Extended; TimeStamp: TDateTime);
   public
     { public declarations }
   end;
@@ -129,34 +137,11 @@ end;
 
 procedure TGridWatchSimulationForm.SaveResultsClick(Sender: TObject);
 var FStream: TFileStream;
-    StartStore: Integer;
-
-  procedure AddToStream(const Buf: AnsiString);
-  begin
-    FStream.Write(Buf[1],Length(Buf));
-  end;
-
 begin
   if FileSaveDialog.Execute then begin
     FStream:=TFileStream.Create(FileSaveDialog.FileName+'-info.txt',fmCreate);
     try
-      AddToStream(Format('Year %s',[Filter.Text])+LineEnding);
-      AddToStream(Format('Shortage treshold %d %',[FShortageTreshold])+LineEnding);
-      if UseWind.Checked then
-        AddToStream(Format('Wind %s x current capacity',[WindCap.Text])+LineEnding);
-      if UseHydro.Checked then
-      AddToStream(Format('Hydro %s x current capacity',[HydroCap.Text])+LineEnding);
-      if UsePump.Checked then begin;
-        AddToStream(Format('Pumped storage %s x Dinorwig 1728 MW',[MaxPump.Text])+LineEnding);
-        AddToStream(Format('Pumped storage efficiency %s %',[StorageEfficiency.Text])+LineEnding);
-        case PumpStart.ItemIndex of
-          1: StartStore:=50;  //Start half full
-          2: StartStore:=100; //Start full capacity
-          else StartStore:=0;
-        end;
-        AddToStream(Format('Capacity at start %d %',[StartStore])+LineEnding);
-      end;
-      AddToStream(LineEnding);
+      SaveResultsToStream(FStream);
     finally
       FStream.Free;
     end;
@@ -172,11 +157,43 @@ end;
 procedure TGridWatchSimulationForm.SimulateClick(Sender: TObject);
 var Demand,Production: Integer;
     ProdWind,ProdHydro: Integer;
-    WindShare,HydroShare,OneMinute,Extra,eMax: Extended;
+    WindShare,HydroShare,OneHour,eMax: Extended;
     ColData: array of String;
     Year,DataLine: String;
     F: TextFile;
-    TimeStamp,LastTimeStamp,dT: TDateTime;
+    TimeStamp,LastTimeStamp,LastDt: TDateTime;
+    TempStream: TStringStream;
+
+  procedure Calculate(dT: TDateTime);
+  var DemandMWh,ProductionMWh,ExtraMWh,NeededMWh,AvailableMWh,Percentage: Extended;
+  begin
+    LastdT:=dT;
+    //Convert to MWh
+    ProductionMWh:=Production*dT/OneHour;
+    DemandMWh:=Demand*dT/OneHour;
+    ExtraMWh:=ProductionMWh-DemandMWh;
+    FUsedElectricity:=FUsedElectricity+DemandMWh;
+    if ExtraMWh>=0 then begin
+      StoreElectricity(ExtraMWh,TimeStamp);
+    end else begin
+      NeededMWh:=-ExtraMWh;
+      eMax:=FDinorwigCount*1728*dT/OneHour; //Max amount available from pumped storage during dT
+      if NeededMWh>eMax then AvailableMWh:=BorrowFromStorage(eMax)
+      else AvailableMWh:=BorrowFromStorage(NeededMWh);
+      Percentage:=100*(ProductionMWh+AvailableMWh)/DemandMWh;
+      if Percentage<=FShortageTreshold then begin
+        //Not enough
+        if Percentage<FWorstShortage then FWorstShortage:=Percentage;
+        if Percentage<FAllTimeWorstShortage then FAllTimeWorstShortage:=Percentage;
+        //Log a shortage
+        if FShortageStarted=0 then FShortageStarted:=TimeStamp;
+      end else begin
+        //Not enough but over shortage treshold
+        if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
+      end;
+    end;
+  end;
+
 begin
   if FFileName='' then exit;
   ShortagesGrid.RowCount:=1;
@@ -187,8 +204,11 @@ begin
   FTimeColumn:=0;
   FShortageCount:=0;
   FShortageStarted:=0;
+  FWastedElectricity:=0;
+  FUsedElectricity:=0;
   FWorstShortage:=100;
-  OneMinute:=EncodeTime(0,1,0,0);
+  FAllTimeWorstShortage:=100;
+  OneHour:=EncodeTime(1,0,0,0);
 
   //Efficiency of storage. Allowed values 0-100
   FStorageEfficiency:=StrToIntDef(StorageEfficiency.Text,0);
@@ -196,11 +216,11 @@ begin
   else if FStorageEfficiency>100 then FStorageEfficiency:=100;
 
   //How many hours the pumped storage can produce at max efficiency
-  FStorageMaxTime:=Round(StrToFloatDef(StorageMaxHours.Text,0)*60);
+  FStorageMaxTime:=Round(StrToFloatDef(StorageMaxHours.Text,0));
   if FStorageMaxTime<0 then FStorageMaxTime:=0;
 
   //If production drops under this, a shortage is logged. Allowed values 0-100.
-  FShortageTreshold:=StrToIntDef(ShortageTreshold.Text,100);
+  FShortageTreshold:=StrToFloatDef(ShortageTreshold.Text,100);
   if FShortageTreshold>100 then FShortageTreshold:=100;
   if FShortageTreshold<0 then FShortageTreshold:=0;
 
@@ -212,6 +232,7 @@ begin
   end else begin
     FMaxStored:=0;
     FDinorwigCount:=0;
+    eMax:=0;
   end;
 
   //Stored energy at start of simulation
@@ -231,8 +252,8 @@ begin
   try
     AssignFile(F,FFileName);
     SetLength(ColData,1);
-    LastTimeStamp:=0; Extra:=0; Production:=0;
-    TimeStamp:=0; Demand:=0;
+    LastTimeStamp:=0; Production:=0;
+    TimeStamp:=0; Demand:=0; LastdT:=0;
     try
       Reset(F);
       while not eof(F) do begin
@@ -243,38 +264,47 @@ begin
           FindColumns(ColData);
           continue;
         end;
-        if (Year<>'') and (pos(Year,ColData[FTimeColumn])<>1) then begin
-          if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
-          continue;
-        end;
         TimeStamp:=StrToDateTime(ColData[FTimeColumn]);
-        if LastTimeStamp>0 then begin
-          dT:=TimeStamp-LastTimeStamp; //Time between timestamps
-          //Convert to MW-minutes.
-          Extra:=Round((Production-Demand)*dT/OneMinute);
-          Demand:=Round(Demand*dT/OneMinute);
-          if Extra>=0 then StoreElectricity(Extra,TimeStamp)
-          else begin
-            Extra:=-Extra;
-            eMax:=FDinorwigCount*1728*dT/OneMinute; //Max amount available from pumped storage during dT
-            if Extra>eMax then Extra:=eMax;
-            UseStoredElectricity(Extra,Demand,TimeStamp);
-          end;
-        end;
+        if LastTimeStamp>0 then Calculate(TimeStamp-LastTimeStamp);
         LastTimeStamp:=TimeStamp;
         Demand:=StrToIntDef(ColData[FDemandColumn],0);
         ProdWind:=StrToIntDef(ColData[FWindColumn],0);
         ProdHydro:=StrToIntDef(ColData[FHydroColumn],0);
         Production:=Round(WindShare*ProdWind+HydroShare*ProdHydro);
+        if (Year<>'') and (pos(Year,ColData[FTimeColumn])<>1) then begin
+          if LastTimeStamp>0 then Calculate(TimeStamp-LastTimeStamp)
+          else if  LastdT>0 then Calculate(LastdT);
+          if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
+          LastdT:=0; LastTimeStamp:=0;
+        end;
       end;
       if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
     finally
       CloseFile(F);
     end;
+    ResultsMemo.Clear;
+    TempStream:=TStringStream.Create('');
+    try
+      SaveResultsToStream(TempStream);
+      ResultsMemo.Text:=TempStream.DataString;
+    finally
+      TempStream.Free;
+    end;
   finally
     Screen.Cursor:=crDefault;
   end;
   SaveResults.Enabled:=true;
+end;
+
+function TGridWatchSimulationForm.BorrowFromStorage(Needed: Extended): Extended;
+begin
+  if Needed<FStoredElectricity then begin
+    result:=Needed;
+    FStoredElectricity:=FStoredElectricity-Needed;
+  end else begin
+    result:=FStoredElectricity;
+    FStoredElectricity:=0;
+  end;
 end;
 
 procedure TGridWatchSimulationForm.FindColumns(const ColData: TStrArray);
@@ -293,7 +323,6 @@ var ShLen: TDateTime;
     i: Integer;
 begin
   try
-    if FWorstShortage>FShortageTreshold then exit;
     ShLen:=TimeStamp-FShortageStarted;
     inc(FShortageCount);
     ShortagesGrid.RowCount:=FShortageCount+1;
@@ -321,41 +350,59 @@ begin
     if i>0 then begin
       ShortagesGrid.Cells[5,FShortageCount]:=IntToStr(i);
     end;
-    ShortagesGrid.Cells[6,FShortageCount]:=IntToStr(FWorstShortage)+'%';
+    ShortagesGrid.Cells[6,FShortageCount]:=IntToStr(Round(FWorstShortage))+'%';
   finally
     FShortageStarted:=0;
     FWorstShortage:=100;
   end;
 end;
 
-procedure TGridWatchSimulationForm.StoreElectricity(e: Extended; TimeStamp: TDateTime);
-//  Assume that we can store all extra electricity, until the pumped storage is full.
-//  In real life it's possible that all excess energy can't be stored at the rate
-//  it's produced.
+procedure TGridWatchSimulationForm.SaveResultsToStream(Stream: TStream);
+var StartStore: Extended;
+
+  procedure AddToStream(const Buf: AnsiString);
+  begin
+    Stream.Write(Buf[1],Length(Buf));
+  end;
+
 begin
-  if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
-  FStoredElectricity:=FStoredElectricity+(e*FStorageEfficiency)/100;
-  if FStoredElectricity>FMaxStored then FStoredElectricity:=FMaxStored;
+  AddToStream(Format('Year %s',[Filter.Text])+LineEnding);
+  AddToStream(Format('Shortage treshold %n',[FShortageTreshold])+'%'+LineEnding);
+  if UseWind.Checked then
+    AddToStream(Format('Wind %s x current capacity',[WindCap.Text])+LineEnding);
+  if UseHydro.Checked then
+  AddToStream(Format('Hydro %s x current capacity',[HydroCap.Text])+LineEnding);
+  if UsePump.Checked then begin;
+    AddToStream(Format('Pumped storage %s x Dinorwig 1728 MW',[MaxPump.Text])+LineEnding);
+    AddToStream(Format('Pumped storage efficiency %s',[StorageEfficiency.Text])+'%'+LineEnding);
+    case PumpStart.ItemIndex of
+      1: StartStore:=FMaxStored/2;  //Start half full
+      2: StartStore:=FMaxStored;    //Start full capacity
+      else StartStore:=0;
+    end;
+    AddToStream(Format('Stored electricity at start %n MWh',[StartStore])+LineEnding);
+    AddToStream(Format('Stored electricity at end %n MWh',[FStoredElectricity])+LineEnding);
+    AddToStream(Format('Used electricity %n MWh',[FUsedElectricity])+LineEnding);
+    AddToStream(Format('Wasted electricity %n MWh',[FWastedElectricity])+LineEnding);
+    AddToStream(Format('Shortages: %d',[ShortagesGrid.RowCount-1])+LineEnding);
+    AddToStream(Format('Worst shortage %n',[FAllTimeWorstShortage])+'%'+LineEnding);
+  end;
 end;
 
-procedure TGridWatchSimulationForm.UseStoredElectricity(e,Demand: Extended; TimeStamp: TDateTime);
-var Missing: Extended;
-    Per: Int64;
+procedure TGridWatchSimulationForm.StoreElectricity(StoreMWh: Extended; TimeStamp: TDateTime);
+//  Store exlectricity until the pumped storage is full.
+var WithEfficiency: Extended;
 begin
-  Missing:=e-FStoredElectricity;
-  if Missing>0 then begin
-    Per:=100-Round((Missing*100/Demand));
-    if Per<FWorstShortage then FWorstShortage:=Per;
-  end;
-  if FStoredElectricity>0 then begin
-    FStoredElectricity:=FStoredElectricity-e;
-    if FStoredElectricity>=0 then begin //Enough energy in storage
-      if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
-      exit;
-    end;
-    //Not enough stored -> Start shortage
-    FStoredElectricity:=0;
-    FShortageStarted:=TimeStamp;
+  if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
+  //What is left when storage efficiency is counted
+  WithEfficiency:=StoreMWh*FStorageEfficiency/100;
+  //Difference is added to wasted electricity
+  FWastedElectricity:=FWastedElectricity+StoreMWh-WithEfficiency;
+  FStoredElectricity:=FStoredElectricity+WithEfficiency;
+  //If storage is full, add the difference to wasted electricity
+  if FStoredElectricity>FMaxStored then begin
+    FWastedElectricity:=FWastedElectricity+FStoredElectricity-FMaxStored;
+    FStoredElectricity:=FMaxStored;
   end;
 end;
 

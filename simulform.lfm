@@ -1,28 +1,28 @@
 object GridWatchSimulationForm: TGridWatchSimulationForm
   Left = 281
-  Height = 414
+  Height = 437
   Top = 178
   Width = 989
   Caption = 'GridWatch green energy simulation V1.02'
-  ClientHeight = 414
+  ClientHeight = 437
   ClientWidth = 989
   OnDestroy = FormDestroy
   OnShow = FormShow
-  LCLVersion = '1.3'
+  LCLVersion = '1.0.14.0'
   object EnergyForms: TGroupBox
     Left = 8
     Height = 96
     Top = 8
     Width = 263
     Caption = 'Choose energy forms and capacity'
-    ClientHeight = 79
+    ClientHeight = 78
     ClientWidth = 259
     TabOrder = 0
     object UseWind: TCheckBox
       Left = 10
-      Height = 24
+      Height = 17
       Top = 9
-      Width = 57
+      Width = 44
       Caption = 'Wind'
       Checked = True
       State = cbChecked
@@ -30,9 +30,9 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object UseHydro: TCheckBox
       Left = 10
-      Height = 24
+      Height = 17
       Top = 42
-      Width = 62
+      Width = 49
       Caption = 'Hydro'
       Checked = True
       State = cbChecked
@@ -40,7 +40,7 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object WindCap: TEdit
       Left = 80
-      Height = 25
+      Height = 21
       Top = 8
       Width = 48
       TabOrder = 2
@@ -48,7 +48,7 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object HydroCap: TEdit
       Left = 80
-      Height = 25
+      Height = 21
       Top = 40
       Width = 48
       TabOrder = 3
@@ -56,42 +56,42 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object Label4: TLabel
       Left = 136
-      Height = 15
+      Height = 14
       Top = 12
-      Width = 111
+      Width = 88
       Caption = 'x current capacity'
       ParentColor = False
     end
     object Label5: TLabel
       Left = 136
-      Height = 15
+      Height = 14
       Top = 44
-      Width = 111
+      Width = 88
       Caption = 'x current capacity'
       ParentColor = False
     end
   end
   object Storage: TGroupBox
     Left = 8
-    Height = 296
+    Height = 319
     Top = 112
     Width = 264
     Anchors = [akTop, akLeft, akBottom]
     Caption = 'Energy storage'
-    ClientHeight = 279
+    ClientHeight = 301
     ClientWidth = 260
     TabOrder = 1
     object Label2: TLabel
       Left = 136
-      Height = 15
+      Height = 14
       Top = 36
-      Width = 69
+      Width = 55
       Caption = 'x 1728 MW'
       ParentColor = False
     end
     object MaxPump: TEdit
       Left = 80
-      Height = 25
+      Height = 21
       Top = 32
       Width = 48
       TabOrder = 0
@@ -99,9 +99,9 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object UsePump: TCheckBox
       Left = 11
-      Height = 24
+      Height = 17
       Top = 8
-      Width = 125
+      Width = 98
       Caption = 'Pumped storage'
       Checked = True
       State = cbChecked
@@ -109,15 +109,15 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object Label6: TLabel
       Left = 16
-      Height = 15
+      Height = 14
       Top = 61
-      Width = 216
+      Width = 171
       Caption = '1728 MW = Dinorwig Power Station'
       ParentColor = False
     end
     object StorageEfficiency: TEdit
       Left = 80
-      Height = 25
+      Height = 21
       Top = 84
       Width = 42
       TabOrder = 2
@@ -125,17 +125,17 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object Label7: TLabel
       Left = 129
-      Height = 15
+      Height = 14
       Top = 89
-      Width = 11
+      Width = 12
       Caption = '%'
       ParentColor = False
     end
     object Label8: TLabel
       Left = 16
-      Height = 15
+      Height = 14
       Top = 88
-      Width = 59
+      Width = 47
       Caption = 'Efficiency'
       ParentColor = False
     end
@@ -154,7 +154,7 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
       ChildSizing.ShrinkVertical = crsScaleChilds
       ChildSizing.Layout = cclLeftToRightThenTopToBottom
       ChildSizing.ControlsPerLine = 1
-      ClientHeight = 68
+      ClientHeight = 67
       ClientWidth = 231
       ItemIndex = 1
       Items.Strings = (
@@ -166,15 +166,15 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object Label11: TLabel
       Left = 16
-      Height = 15
+      Height = 14
       Top = 118
-      Width = 90
+      Width = 74
       Caption = 'Out of water in'
       ParentColor = False
     end
     object StorageMaxHours: TEdit
       Left = 112
-      Height = 25
+      Height = 21
       Top = 112
       Width = 42
       TabOrder = 4
@@ -182,33 +182,33 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object Label12: TLabel
       Left = 160
-      Height = 15
+      Height = 14
       Top = 118
-      Width = 34
+      Width = 28
       Caption = 'hours'
       ParentColor = False
     end
   end
   object GroupBox1: TGroupBox
     Left = 280
-    Height = 400
+    Height = 423
     Top = 8
     Width = 704
     Anchors = [akTop, akLeft, akRight, akBottom]
-    ClientHeight = 396
+    ClientHeight = 405
     ClientWidth = 700
     TabOrder = 2
     object Label3: TLabel
       Left = 8
-      Height = 15
+      Height = 14
       Top = 14
-      Width = 25
+      Width = 23
       Caption = 'Year'
       ParentColor = False
     end
     object Filter: TEdit
       Left = 40
-      Height = 25
+      Height = 21
       Top = 9
       Width = 114
       TabOrder = 0
@@ -227,7 +227,7 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object ShortageTreshold: TEdit
       Left = 288
-      Height = 25
+      Height = 21
       Top = 8
       Width = 42
       TabOrder = 2
@@ -235,24 +235,24 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     end
     object Label9: TLabel
       Left = 176
-      Height = 15
+      Height = 14
       Top = 14
-      Width = 108
+      Width = 87
       Caption = 'Shortage treshold'
       ParentColor = False
     end
     object Label10: TLabel
       Left = 336
-      Height = 15
+      Height = 14
       Top = 14
-      Width = 11
+      Width = 12
       Caption = '%'
       ParentColor = False
     end
     object SaveResults: TButton
       Left = 568
       Height = 27
-      Top = 365
+      Top = 374
       Width = 120
       Anchors = [akRight, akBottom]
       Caption = 'Save results'
@@ -273,18 +273,19 @@ object GridWatchSimulationForm: TGridWatchSimulationForm
     object PageControl1: TPageControl
       Left = 0
       Height = 328
-      Top = 32
+      Top = 40
       Width = 696
       ActivePage = ResultsPage
+      Anchors = [akTop, akLeft, akRight, akBottom]
       TabIndex = 0
       TabOrder = 5
       object ResultsPage: TTabSheet
         Caption = 'Results'
-        ClientHeight = 291
+        ClientHeight = 302
         ClientWidth = 688
         object ResultsMemo: TMemo
           Left = 0
-          Height = 291
+          Height = 302
           Top = 0
           Width = 688
           Align = alClient

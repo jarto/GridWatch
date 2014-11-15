@@ -50,22 +50,22 @@ Results are divided to two tabs:
 
 EXAMPLE
 
-Year 2014-01-01
-Shortage treshold 90.00%
-Wind 6 x current capacity
-Hydro 1 x current capacity
-Pumped storage 6 x Dinorwig 1728 MW
-Pumped storage efficiency 75%
-Stored electricity at start 31,104.00 MWh    <-- Started half full
-Stored electricity at end 613.56 MWh         <-- Storage almost empty at the end of the day
-Used electricity 794,042.09 MWh
-Wasted electricity 859.01 MWh
-Shortages: 1
-Worst shortage 76.67%                        <-- Amount of electricity during the worst time
+- Year 2014-01-01
+- Shortage treshold 90.00%
+- Wind 6 x current capacity
+- Hydro 1 x current capacity
+- Pumped storage 6 x Dinorwig 1728 MW
+- Pumped storage efficiency 75%
+- Stored electricity at start 31,104.00 MWh    <-- Started half full
+- Stored electricity at end 613.56 MWh         <-- Storage almost empty at the end of the day
+- Used electricity 794,042.09 MWh
+- Wasted electricity 859.01 MWh
+- Shortages: 1
+- Worst shortage 76.67%                        <-- Amount of electricity during the worst time
 
-Shortage started: 01.01.2014 12:45:02
-Shortage ended: 01.01.2014 22:10:02
-Length of shortage: 9 hours, 24 minutes, 59 seconds
+- Shortage started: 01.01.2014 12:45:02
+- Shortage ended: 01.01.2014 22:10:02
+- Length of shortage: 9 hours, 24 minutes, 59 seconds
 
 CHANGELOG
 

@@ -52,56 +52,56 @@ Results are divided to two tabs:
   - Lowest = How little electricity was available at the worst time during the shortage
 
 EXAMPLE
+  
+Year 2022  
+Shortage treshold 100.00%  
+Wind 5 x current capacity  
+Solar 20 x current capacity  
+Hydro 1 x current capacity  
+Biomass 1 x current capacity  
+Nuclear 1 x current capacity  
+  
+Total consumption 261,694,797.49 MWh  
+Total production: 594,652,207.53 MWh  
+  Wind production: 308,483,588.24 MWh  
+  Solar production: 223,102,430.64 MWh  
+  Hydro production: 3,347,595.54 MWh  
+  Biomass production: 14,999,268.64 MWh  
+  Nuclear production: 44,719,324.46 MWh  
+  
+Battery storage 1000 x Tesla Big Battery 150 MW  
+Storage efficiency 94%  
+Stored electricity at start 375,000.00 MWh  
+Stored electricity at end 750,000.00 MWh  
+Wasted electricity 333,754,049.84 MWh  
+  
+Shortages: 7  
+Worst shortage 33.00%  
+Lowest storage 0.00%  
+  
+CHANGELOG  
+  
+08.11.2014 V1.00 Initial version  
+  
+12.11.2014 V1.01 Changes to pumped storage:  
+                 - Define how long it will take to run out of water.  
+                 - Make sure to not get more energy from pumped storage, than it can produce in dT.  
+                 Added more documentation to the code.  
+                 Added license  
+  
+14.11.2014 V1.02 Changes to the code to improve accuracy.  
+                 Results-tab for an overview.  
+                 Made code more readable.  
+                 Added more documentation to the code.  
+                 Testing against calculations in OpenOffice.  
+                 Added an example to README  
 
-Year 2022
-Shortage treshold 100.00%
-Wind 5 x current capacity
-Solar 20 x current capacity
-Hydro 1 x current capacity
-Biomass 1 x current capacity
-Nuclear 1 x current capacity
-
-Total consumption 261,694,797.49 MWh
-Total production: 594,652,207.53 MWh
-  Wind production: 308,483,588.24 MWh
-  Solar production: 223,102,430.64 MWh
-  Hydro production: 3,347,595.54 MWh
-  Biomass production: 14,999,268.64 MWh
-  Nuclear production: 44,719,324.46 MWh
-
-Battery storage 1000 x Tesla Big Battery 150 MW
-Storage efficiency 94%
-Stored electricity at start 375,000.00 MWh
-Stored electricity at end 750,000.00 MWh
-Wasted electricity 333,754,049.84 MWh
-
-Shortages: 7
-Worst shortage 33.00%
-Lowest storage 0.00%
-
-CHANGELOG
-
-08.11.2014 V1.00 Initial version
-
-12.11.2014 V1.01 Changes to pumped storage:
-                 - Define how long it will take to run out of water.
-                 - Make sure to not get more energy from pumped storage, than it can produce in dT.
-                 Added more documentation to the code.
-                 Added license
-
-14.11.2014 V1.02 Changes to the code to improve accuracy.
-                 Results-tab for an overview.
-                 Made code more readable.
-                 Added more documentation to the code.
-                 Testing against calculations in OpenOffice.
-                 Added an example to README
-
-24.04.2023 V1.03 Add solar, biomass and nuclear
-                 Change from pumped storage to Tesla battery storage
-                 Improve reports
-                 Bug fixes
-
-LICENSE
-
-GNU General Public License v3
+24.04.2023 V1.03 Add solar, biomass and nuclear  
+                 Change from pumped storage to Tesla battery storage  
+                 Improve reports  
+                 Bug fixes  
+  
+LICENSE  
+  
+GNU General Public License v3  
 

@@ -14,9 +14,16 @@ type
   { TGridWatchSimulationForm }
 
   TGridWatchSimulationForm = class(TForm)
+    NuclearCap: TEdit;
     FileSaveDialog: TSaveDialog;
+    BioCap: TEdit;
+    Label14: TLabel;
+    Label15: TLabel;
+    Label6: TLabel;
+    SolarCap: TEdit;
     Label11: TLabel;
     Label12: TLabel;
+    Label13: TLabel;
     ResultsMemo: TMemo;
     PageControl1: TPageControl;
     SaveResults: TButton;
@@ -25,7 +32,7 @@ type
     ShortageTreshold: TEdit;
     Label10: TLabel;
     Label9: TLabel;
-    PumpStart: TRadioGroup;
+    StorageStart: TRadioGroup;
     Simulate: TButton;
     Filter: TEdit;
     GroupBox1: TGroupBox;
@@ -34,13 +41,15 @@ type
     Label8: TLabel;
     OpenCsv: TButton;
     StorageEfficiency: TEdit;
-    Label6: TLabel;
     StorageMaxHours: TEdit;
     ResultsPage: TTabSheet;
     ShortagesPage: TTabSheet;
-    UsePump: TCheckBox;
+    UseBiomass: TCheckBox;
+    UseNuclear: TCheckBox;
+    UseSolar: TCheckBox;
+    UseTeslaBattery: TCheckBox;
     Label2: TLabel;
-    MaxPump: TEdit;
+    MaxBatteries: TEdit;
     Storage: TGroupBox;
     Label4: TLabel;
     Label5: TLabel;
@@ -56,22 +65,30 @@ type
     procedure SimulateClick(Sender: TObject);
   private
     FFileName: String;
-    FCapMultiEdits: array of TEdit;
-    FDinorwigCount: Extended;
+    FStorageCount: Extended;
     FStoredElectricity: Extended;
     FWastedElectricity: Extended;
     FUsedElectricity: Extended;
+    FWindTotal: Extended;
+    FSolarTotal: Extended;
+    FHydroTotal: Extended;
+    FBioTotal: Extended;
+    FNuclearTotal: Extended;
     FStorageEfficiency: Integer; // In percentage
     FStorageMaxTime: Integer; // In hours
     FShortageCount: Integer;
     FShortageStarted: TDateTime;
     FWorstShortage: Extended;
+    FLowestStorage: Extended;
     FAllTimeWorstShortage: Extended;
     FShortageTreshold: Extended;
     FMaxStored: Extended;
     FDemandColumn: Integer;
     FWindColumn: Integer;
+    FSolarColumn: Integer;
     FHydroColumn: Integer;
+    FBioColumn: Integer;
+    FNuclearColumn: Integer;
     FTimeColumn: Integer;
     function BorrowFromStorage(Needed: Extended): Extended;
     procedure FindColumns(const ColData: TStrArray);
@@ -156,8 +173,8 @@ end;
 
 procedure TGridWatchSimulationForm.SimulateClick(Sender: TObject);
 var Demand,Production: Integer;
-    ProdWind,ProdHydro: Integer;
-    WindShare,HydroShare,OneHour,eMax: Extended;
+    ProdWind,ProdSolar,ProdHydro,ProdBio,ProdNuclear: Extended;
+    WindShare,SolarShare,HydroShare,BioShare,NuclearShare,OneHour,eMax: Extended;
     ColData: array of String;
     Year,DataLine: String;
     F: TextFile;
@@ -173,15 +190,23 @@ var Demand,Production: Integer;
     DemandMWh:=Demand*dT/OneHour;
     ExtraMWh:=ProductionMWh-DemandMWh;
     FUsedElectricity:=FUsedElectricity+DemandMWh;
+
+    FWindTotal:=FWindTotal+WindShare*ProdWind*dT/OneHour;
+    FSolarTotal:=FSolarTotal+SolarShare*ProdSolar*dT/OneHour;
+    FHydroTotal:=FHydroTotal+HydroShare*ProdHydro*dT/OneHour;
+    FBioTotal:=FBioTotal+BioShare*ProdBio*dT/OneHour;
+    FNuclearTotal:=FNuclearTotal+NuclearShare*ProdNuclear*dT/OneHour;
+
     if ExtraMWh>=0 then begin
       StoreElectricity(ExtraMWh,TimeStamp);
+      if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
     end else begin
       NeededMWh:=-ExtraMWh;
-      eMax:=FDinorwigCount*1728*dT/OneHour; //Max amount available from pumped storage during dT
+      eMax:=FStorageCount*150*dT/OneHour; //Max amount available from storage during dT
       if NeededMWh>eMax then AvailableMWh:=BorrowFromStorage(eMax)
       else AvailableMWh:=BorrowFromStorage(NeededMWh);
-      Percentage:=100*(ProductionMWh+AvailableMWh)/DemandMWh;
-      if Percentage<=FShortageTreshold then begin
+      Percentage:=Round(100*(ProductionMWh+AvailableMWh)/DemandMWh);
+      if Percentage<FShortageTreshold then begin
         //Not enough
         if Percentage<FWorstShortage then FWorstShortage:=Percentage;
         if Percentage<FAllTimeWorstShortage then FAllTimeWorstShortage:=Percentage;
@@ -200,12 +225,20 @@ begin
 
   FDemandColumn:=0;
   FWindColumn:=0;
+  FSolarColumn:=0;
   FHydroColumn:=0;
+  FBioColumn:=0;
+  FNuclearColumn:=0;
   FTimeColumn:=0;
   FShortageCount:=0;
   FShortageStarted:=0;
   FWastedElectricity:=0;
   FUsedElectricity:=0;
+  FWindTotal:=0;
+  FSolarTotal:=0;
+  FHydroTotal:=0;
+  FBioTotal:=0;
+  FNuclearTotal:=0;
   FWorstShortage:=100;
   FAllTimeWorstShortage:=100;
   OneHour:=EncodeTime(1,0,0,0);
@@ -224,27 +257,32 @@ begin
   if FShortageTreshold>100 then FShortageTreshold:=100;
   if FShortageTreshold<0 then FShortageTreshold:=0;
 
-  if UsePump.Checked then begin
-    FDinorwigCount:=StrToFloatDef(MaxPump.Text,0); //How many Dinorwigs do we have?
-    if FDinorwigCount<0 then FDinorwigCount:=0;
-    FMaxStored:=FDinorwigCount*1728*FStorageMaxTime; //Max energy that can be stored
+  if UseTeslaBattery.Checked then begin
+    FStorageCount:=StrToFloatDef(MaxBatteries.Text,0); //How many Big Batteries do we have?
+    if FStorageCount<0 then FStorageCount:=0;
+    FMaxStored:=FStorageCount*150*FStorageMaxTime; //Max energy that can be stored
     if FMaxStored<0 then FMaxStored:=0;
   end else begin
     FMaxStored:=0;
-    FDinorwigCount:=0;
+    FStorageCount:=0;
     eMax:=0;
   end;
 
   //Stored energy at start of simulation
-  case PumpStart.ItemIndex of
+  case StorageStart.ItemIndex of
     1: FStoredElectricity:=FMaxStored*0.5;   //Start half full
     2: FStoredElectricity:=FMaxStored;       //Start full capacity
     else FStoredElectricity:=0;              //Start empty
   end;
 
-  //How much wind and hydro will be used
+  FLowestStorage:=100;
+
+  //How much wind, solar, hydro, biomass and nuclear will be used
   if UseWind.Checked then WindShare:=StrToFloatDef(WindCap.Text,0) else WindShare:=0;
+  if UseSolar.Checked then SolarShare:=StrToFloatDef(SolarCap.Text,0) else SolarShare:=0;
   if UseHydro.Checked then HydroShare:=StrToFloatDef(HydroCap.Text,0) else HydroShare:=0;
+  if UseBiomass.Checked then BioShare:=StrToFloatDef(BioCap.Text,0) else BioShare:=0;
+  if UseNuclear.Checked then NuclearShare:=StrToFloatDef(NuclearCap.Text,0) else NuclearShare:=0;
 
   Year:=Filter.Text;
 
@@ -260,22 +298,28 @@ begin
         ReadLn(F,DataLine);
         SplitString(DataLine,',',ColData);
         //Find the right columns from column headers
-        if FWindColumn=0 then begin
+        if FTimeColumn=0 then begin
           FindColumns(ColData);
           continue;
         end;
-        TimeStamp:=StrToDateTime(ColData[FTimeColumn]);
-        if LastTimeStamp>0 then Calculate(TimeStamp-LastTimeStamp);
-        LastTimeStamp:=TimeStamp;
-        Demand:=StrToIntDef(ColData[FDemandColumn],0);
-        ProdWind:=StrToIntDef(ColData[FWindColumn],0);
-        ProdHydro:=StrToIntDef(ColData[FHydroColumn],0);
-        Production:=Round(WindShare*ProdWind+HydroShare*ProdHydro);
-        if (Year<>'') and (pos(Year,ColData[FTimeColumn])<>1) then begin
+        if (Year='') or (pos(Year,ColData[FTimeColumn])<>0) then begin
+          TimeStamp:=StrToDateTime(ColData[FTimeColumn]);
+          //if LastTimeStamp>0 then Calculate(TimeStamp-LastTimeStamp);
+          //LastTimeStamp:=TimeStamp;
+          Demand:=StrToIntDef(ColData[FDemandColumn],0);
+          ProdWind:=StrToIntDef(ColData[FWindColumn],0);
+          if FSolarColumn>0 then ProdSolar:=StrToFloatDef(ColData[FSolarColumn],0) else ProdSolar:=0;
+          if FHydroColumn>0 then ProdHydro:=StrToIntDef(ColData[FHydroColumn],0) else ProdHydro:=0;
+          if FBioColumn>0 then ProdBio:=StrToIntDef(ColData[FBioColumn],0) else ProdBio:=0;
+          if FNuclearColumn>0 then ProdNuclear:=StrToIntDef(ColData[FNuclearColumn],0) else ProdNuclear:=0;
+          Production:=Round(WindShare*ProdWind
+                           +SolarShare*ProdSolar
+                           +HydroShare*ProdHydro
+                           +BioShare*ProdBio
+                           +NuclearShare*ProdNuclear);
           if LastTimeStamp>0 then Calculate(TimeStamp-LastTimeStamp)
-          else if  LastdT>0 then Calculate(LastdT);
-          if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
-          LastdT:=0; LastTimeStamp:=0;
+          else if LastdT>0 then Calculate(LastdT);
+          LastTimeStamp:=TimeStamp;
         end;
       end;
       if FShortageStarted>0 then LogEndOfShortage(TimeStamp);
@@ -297,10 +341,13 @@ begin
 end;
 
 function TGridWatchSimulationForm.BorrowFromStorage(Needed: Extended): Extended;
+var LeftInStorage: Extended;
 begin
   if Needed<FStoredElectricity then begin
     result:=Needed;
     FStoredElectricity:=FStoredElectricity-Needed;
+    LeftInStorage:=Round(100*FStoredElectricity/FMaxStored);
+    if LeftInStorage<FLowestStorage then FLowestStorage:=LeftInStorage;
   end else begin
     result:=FStoredElectricity;
     FStoredElectricity:=0;
@@ -314,7 +361,10 @@ begin
     if ColData[a]='timestamp' then FTimeColumn:=a
     else if ColData[a]='demand' then FDemandColumn:=a
     else if ColData[a]='wind' then FWindColumn:=a
-    else if ColData[a]='hydro' then FHydroColumn:=a;
+    else if ColData[a]='solar' then FSolarColumn:=a
+    else if ColData[a]='hydro' then FHydroColumn:=a
+    else if ColData[a]='biomass' then FBioColumn:=a
+    else if ColData[a]='nuclear' then FNuclearColumn:=a;
   end;
 end;
 
@@ -370,22 +420,46 @@ begin
   AddToStream(Format('Shortage treshold %n',[FShortageTreshold])+'%'+LineEnding);
   if UseWind.Checked then
     AddToStream(Format('Wind %s x current capacity',[WindCap.Text])+LineEnding);
+  if UseSolar.Checked then
+    AddToStream(Format('Solar %s x current capacity',[SolarCap.Text])+LineEnding);
   if UseHydro.Checked then
-  AddToStream(Format('Hydro %s x current capacity',[HydroCap.Text])+LineEnding);
-  if UsePump.Checked then begin;
-    AddToStream(Format('Pumped storage %s x Dinorwig 1728 MW',[MaxPump.Text])+LineEnding);
-    AddToStream(Format('Pumped storage efficiency %s',[StorageEfficiency.Text])+'%'+LineEnding);
-    case PumpStart.ItemIndex of
+    AddToStream(Format('Hydro %s x current capacity',[HydroCap.Text])+LineEnding);
+  if UseBiomass.Checked then
+    AddToStream(Format('Biomass %s x current capacity',[BioCap.Text])+LineEnding);
+  if UseNuclear.Checked then
+    AddToStream(Format('Nuclear %s x current capacity',[NuclearCap.Text])+LineEnding);
+
+  AddToStream(LineEnding);
+  AddToStream(Format('Total consumption %n MWh',[FUsedElectricity])+LineEnding);
+  AddToStream(Format('Total production: %n MWh',[FWindTotal+FSolarTotal+FHydroTotal+FBioTotal+FNuclearTotal])+LineEnding);
+
+  if FWindTotal>0 then
+    AddToStream(Format('  Wind production: %n MWh',[FWindTotal])+LineEnding);
+  if FSolarTotal>0 then
+    AddToStream(Format('  Solar production: %n MWh',[FSolarTotal])+LineEnding);
+  if FHydroTotal>0 then
+    AddToStream(Format('  Hydro production: %n MWh',[FHydroTotal])+LineEnding);
+  if FBioTotal>0 then
+    AddToStream(Format('  Biomass production: %n MWh',[FBioTotal])+LineEnding);
+  if FNuclearTotal>0 then
+    AddToStream(Format('  Nuclear production: %n MWh',[FNuclearTotal])+LineEnding);
+
+  if UseTeslaBattery.Checked then begin;
+    AddToStream(LineEnding);
+    AddToStream(Format('Battery storage %s x Tesla Big Battery 150 MW',[MaxBatteries.Text])+LineEnding);
+    AddToStream(Format('Storage efficiency %s',[StorageEfficiency.Text])+'%'+LineEnding);
+    case StorageStart.ItemIndex of
       1: StartStore:=FMaxStored/2;  //Start half full
       2: StartStore:=FMaxStored;    //Start full capacity
       else StartStore:=0;
     end;
     AddToStream(Format('Stored electricity at start %n MWh',[StartStore])+LineEnding);
     AddToStream(Format('Stored electricity at end %n MWh',[FStoredElectricity])+LineEnding);
-    AddToStream(Format('Used electricity %n MWh',[FUsedElectricity])+LineEnding);
     AddToStream(Format('Wasted electricity %n MWh',[FWastedElectricity])+LineEnding);
+    AddToStream(LineEnding);
     AddToStream(Format('Shortages: %d',[ShortagesGrid.RowCount-1])+LineEnding);
     AddToStream(Format('Worst shortage %n',[FAllTimeWorstShortage])+'%'+LineEnding);
+    AddToStream(Format('Lowest storage %n',[FLowestStorage])+'%'+LineEnding);
   end;
 end;
 
